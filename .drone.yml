@@ -9,7 +9,7 @@
 #######################################################################################################################
 #######################################################################################################################
 
-# This pipeline would be used after each merge request to build mmpret latest docker images
+# This pipeline would be used after each merge request to build mmpose latest docker images
 kind: pipeline
 type: docker
 name: mmpose LS_mmpose_latest
@@ -59,7 +59,7 @@ steps:
 #######################################################################################################################
 #######################################################################################################################
 
-# 2. Build docker image for mmpret
+# 2. Build docker image for mmpose
 ---
 kind: pipeline
 type: docker
