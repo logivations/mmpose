@@ -1,10 +1,5 @@
 _base_ = ['../../../_base_/default_runtime.py']
 
-
-num_keypoints =4 # CHECK IT PLZ
-
-
-
 # runtime
 train_cfg = dict(max_epochs=300, val_interval=10)
 
@@ -13,6 +8,7 @@ optim_wrapper = dict(optimizer=dict(
     type='Adam',
     lr=5e-4,
 ))
+
 # learning policy
 param_scheduler = [
     dict(
@@ -35,9 +31,19 @@ default_hooks = dict(
     checkpoint=dict(save_best='coco/AP', rule='greater'),
 )
 
-# custom_hooks = [
+custom_hooks = [
     # dict(type='PCKAccuracyTrainHook', interval=10, thr=0.05),
-# ]
+    dict(
+        type='EarlyStoppingHook',
+        monitor='5pr_/PCK',
+        rule='greater',
+        min_delta=0.001,
+        patience=20,
+        stopping_threshold=None,
+        strict=False,
+        check_finite=True
+    ),
+]
 
 # codec settings
 codec = dict(
@@ -59,7 +65,7 @@ model = dict(
     head=dict(
         type='HeatmapHead',
         in_channels=512,
-        out_channels=num_keypoints,
+        out_channels=7,
         loss=dict(type='KeypointMSELoss', use_target_weight=True),
         decoder=codec),
     test_cfg=dict(
@@ -71,51 +77,36 @@ model = dict(
 # base dataset settings
 dataset_type = 'CocoDataset'
 data_mode = 'topdown'
-# data_root = 'data/exported_ls_data/'
-# data_root = 'data/1704_all_exported_data_project_id_422/'
-# data_root = 'data/1704_split_exported_data_project_id_422/'
-# data_root = 'data/demodesk_iter_2/'
-# data_root = 'data/idk_what_i_do_1335_stef_17_10_24/'
-# data_root = '/data/new_mmpose/mmpose/data/4045_stef_png_18_10_24/'
-# data_root = '/data/new_mmpose/mmpose/data/new_kp_model/'
-# data_root = '/data/brugen_keypoints/'
-# data_root = 'data/stef_kp_04_11_24/'
-#data_root = 'data/pallet_#data_root = 'data/kp_id322_6_12_24/'
-#data_root = 'data/kp_id322_6_12_24/'
-# data_root = 'data/bruggen_9_12_kp/'
-# data_root = 'data/16_12/'
-data_root = 'data/17_pallet_kp/'
+data_root = "data/joined/"
 
 # pipelines
 train_pipeline = [
     dict(type='LoadImage'),
     dict(type='GetBBoxCenterScale'),
     dict(type='RandomFlip', direction='horizontal'),
-    # dict(type='RandomHalfBody'),
-    # TODO: plot
     dict(type='RandomBBoxTransform'),
     dict(type='TopdownAffine', input_size=codec['input_size']),
     dict(
         type='Albumentation',
         transforms=[
-            dict(type='RandomBrightnessContrast', brightness_limit=[-0.2, 0.2], contrast_limit=[-0.2, 0.2], p=0.4),
+            dict(type='RandomBrightnessContrast', brightness_limit=[-0.4, 0.4], contrast_limit=[-0.4, 0.4], p=0.6),
 
             dict(
                 type='OneOf',
                 transforms=[
-                    dict(type='MotionBlur', blur_limit=3, p=0.3),
-                    dict(type='MedianBlur', blur_limit=3, p=0.2),
-                    dict(type='Blur', blur_limit=3, p=0.2),
-                ], p=0.3),
+                    dict(type='MotionBlur', blur_limit=5, p=0.3),
+                    dict(type='MedianBlur', blur_limit=5, p=0.3),
+                    dict(type='Blur', blur_limit=5, p=0.3),
+                ], p=0.4),
 
             dict(
                 type='OneOf',
                 transforms=[
-                    dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.3),
-                    dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
+                    dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.4),
+                    dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.4),
                 ], p=0.4),
             
-            dict(type='HueSaturationValue', hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.3),
+            dict(type='HueSaturationValue', hue_shift_limit=20, sat_shift_limit=20, val_shift_limit=20, p=0.5),
         ]),
     dict(type='GenerateTarget', encoder=codec),
     dict(type='PackPoseInputs')
@@ -135,7 +126,6 @@ train_dataloader = dict(
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type=dataset_type,
-	    num_keypoints=num_keypoints,
         data_root=data_root,
         data_mode=data_mode,
         ann_file='annotations/forklift_keypoints_train2017.json',
@@ -150,10 +140,9 @@ val_dataloader = dict(
     sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
     dataset=dict(
         type=dataset_type,
-	    num_keypoints=num_keypoints,
         data_root=data_root,
         data_mode=data_mode,
-        ann_file='annotations/forklift_keypoints_train2017.json',
+        ann_file='annotations/forklift_keypoints_val2017.json',
         bbox_file='',
         data_prefix=dict(img='val2017/'),
         test_mode=True,
@@ -165,7 +154,7 @@ test_dataloader = val_dataloader
 val_evaluator = [
     dict(
         type='CocoMetric',
-        ann_file=data_root + 'annotations/forklift_keypoints_train2017.json'
+        ann_file=data_root + 'annotations/forklift_keypoints_val2017.json'
     ),
     dict(
         type='EPE',
