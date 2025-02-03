@@ -1,7 +1,7 @@
 _base_ = ['../../../_base_/default_runtime.py']
 
 
-num_keypoints =4 # CHECK IT PLZ
+num_keypoints = 4 # CHECK IT PLZ
 
 
 
@@ -71,21 +71,11 @@ model = dict(
 # base dataset settings
 dataset_type = 'CocoDataset'
 data_mode = 'topdown'
-# data_root = 'data/exported_ls_data/'
-# data_root = 'data/1704_all_exported_data_project_id_422/'
-# data_root = 'data/1704_split_exported_data_project_id_422/'
-# data_root = 'data/demodesk_iter_2/'
-# data_root = 'data/idk_what_i_do_1335_stef_17_10_24/'
-# data_root = '/data/new_mmpose/mmpose/data/4045_stef_png_18_10_24/'
-# data_root = '/data/new_mmpose/mmpose/data/new_kp_model/'
-# data_root = '/data/brugen_keypoints/'
-# data_root = 'data/stef_kp_04_11_24/'
-#data_root = 'data/pallet_#data_root = 'data/kp_id322_6_12_24/'
-#data_root = 'data/kp_id322_6_12_24/'
-# data_root = 'data/bruggen_9_12_kp/'
-# data_root = 'data/16_12/'
-data_root = 'data/17_pallet_kp/'
+# data_root='data/coco_wurth_07_01_25/'
+# data_root='data/kp_brug_03_01/'
 
+#data_root= 'data/brug_kp_22_01/'
+data_root= '/data/wurth_optimization_dataset/'
 # pipelines
 train_pipeline = [
     dict(type='LoadImage'),
