@@ -1,11 +1,52 @@
 from mmengine.config import Config
+import cv2
 
+AUGMENTATIONS ={
+    0:[
+        dict(
+            type='Albumentation',
+            transforms=[
+                dict(type='RandomBrightnessContrast', brightness_limit=[-0.25, 0.1], contrast_limit=[-0.4, 0.4], p=0.4),
+
+                dict(
+                    type='OneOf',
+                    transforms=[
+                        dict(type='MotionBlur', blur_limit=3, p=0.3),
+                        dict(type='MedianBlur', blur_limit=3, p=0.2),
+                        dict(type='Blur', blur_limit=3, p=0.2),
+                    ], p=0.3),
+                dict(
+                    type='OneOf',
+                    transforms=[
+                        dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.3),
+                        dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
+                    ], p=0.4),
+
+            ]),
+        
+        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2],  rotate_factor=80),
+    ],
+    1: [
+        dict(
+            type='Albumentation',
+            transforms=[
+                dict(type='RandomBrightnessContrast', brightness_limit=[-0.25, 0.1], contrast_limit=[-0.4, 0.4], p=0.4),
+                
+        ]),
+        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2], rotate_factor=80),
+    ],
+}
 
 
 def make_mmpose_config(
         data_root: str,
         classes: list,
         res: tuple = (192, 256),
+        augmentation_index: int = 0,
+        batch_size: int = 64,
+        repeat_times: int = 1,
+        resnet_depth: int = 18, # 18 or 50
+        max_epoch: int = 120
 ):
 
     cfg = Config()
@@ -27,6 +68,11 @@ def make_mmpose_config(
             out_dir='badcase',
             metric_type='loss',
             badcase_thr=5))
+
+    cfg.log_config = dict(
+        interval=50,
+        hooks=[dict(type='TextLoggerHook'),
+               dict(type='TensorboardLoggerHook')])
 
     # custom hooks
     cfg.custom_hooks = [
@@ -62,7 +108,7 @@ def make_mmpose_config(
     cfg.backend_args = dict(backend='local')
 
     # training/validation/testing progress
-    cfg.train_cfg = dict(max_epochs=300, val_interval=10, by_epoch=True)
+    cfg.train_cfg = dict(max_epochs=max_epoch, val_interval=10, by_epoch=True)
     cfg.val_cfg = dict()
     cfg.test_cfg = dict()
     # runtime
@@ -87,11 +133,11 @@ def make_mmpose_config(
     ]
 
     # automatically scaling LR based on the actual training batch size
-    cfg.auto_scale_lr = dict(base_batch_size=64)
+    cfg.auto_scale_lr = dict(base_batch_size=batch_size)
 
     # codec settings
     cfg.codec = dict(
-        type='MSRAHeatmap', input_size=res, heatmap_size=(48, 64), sigma=2)
+        type='MSRAHeatmap', input_size=res, heatmap_size=(int(res[0]/4), int(res[1]/4)), sigma=2)
 
     # model settings
     cfg.model = dict(
@@ -103,8 +149,8 @@ def make_mmpose_config(
             bgr_to_rgb=True),
         backbone=dict(
             type='ResNet',
-            depth=18,
-            init_cfg=dict(type='Pretrained', checkpoint='torchvision://resnet18'),
+            depth=resnet_depth,
+            init_cfg=dict(type='Pretrained', checkpoint=f'torchvision://resnet{resnet_depth}'),
         ),
         head=dict(
             type='HeatmapHead',
@@ -124,60 +170,52 @@ def make_mmpose_config(
     cfg.data_root = data_root
 
     # pipelines
+    # cfg.train_pipeline = [
+    #     dict(type='LoadImage'),
+    #     dict(type='GetBBoxCenterScale'),
+    #     # dict(type='RandomBBoxTransform'),
+    #     *AUGMENTATIONS[augmentation_index],
+    #     dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
+    #     dict(type='GenerateTarget', encoder=cfg.codec),
+    #     dict(type='PackPoseInputs')
+    # ]
     cfg.train_pipeline = [
-        dict(type='LoadImage'),
-        dict(type='GetBBoxCenterScale'),
-        dict(type='RandomBBoxTransform'),
-        dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
-        dict(
-            type='Albumentation',
-            transforms=[
-                dict(type='RandomBrightnessContrast', brightness_limit=[-0.2, 0.2], contrast_limit=[-0.2, 0.2], p=0.4),
-
-                dict(
-                    type='OneOf',
-                    transforms=[
-                        dict(type='MotionBlur', blur_limit=3, p=0.3),
-                        dict(type='MedianBlur', blur_limit=3, p=0.2),
-                        dict(type='Blur', blur_limit=3, p=0.2),
-                    ], p=0.3),
-
-                dict(
-                    type='OneOf',
-                    transforms=[
-                        dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.3),
-                        dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
-                    ], p=0.4),
-
-                dict(type='HueSaturationValue', hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.3),
-            ]),
-        dict(type='GenerateTarget', encoder=cfg.codec),
-        dict(type='PackPoseInputs')
+        dict(type='mmpose.LoadImage'),
+        dict(type='mmpose.GetBBoxCenterScale'),
+        *AUGMENTATIONS[augmentation_index],
+        dict(type='mmpose.TopdownAffine', input_size=cfg.codec['input_size']),
+        dict(type='mmpose.GenerateTarget', encoder=cfg.codec),
+        dict(type='mmpose.PackPoseInputs')
     ]
+
     val_pipeline = [
         dict(type='LoadImage'),
         dict(type='GetBBoxCenterScale'),
         dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
         dict(type='PackPoseInputs')
     ]
-
     # data loaders
     cfg.train_dataloader = dict(
-        batch_size=64,
+        batch_size=batch_size,
         num_workers=4,
         persistent_workers=True,
         sampler=dict(type='DefaultSampler', shuffle=True),
         dataset=dict(
-            type=cfg.dataset_type,
-            labels=classes,
-            data_root=data_root,
-            data_mode=cfg.data_mode,
-            ann_file='annotations/forklift_keypoints_train2017.json',
-            data_prefix=dict(img='train2017/'),
-            pipeline=cfg.train_pipeline,
-        ))
+        type='RepeatDataset',
+        times=repeat_times,
+        dataset=dict(
+                type=cfg.dataset_type,
+                labels=classes,
+                data_root=data_root,
+                data_mode=cfg.data_mode,
+                ann_file='annotations/forklift_keypoints_train2017.json',
+                data_prefix=dict(img='train2017/'),
+                pipeline=cfg.train_pipeline,
+            ),
+        )
+    )
     cfg.val_dataloader = dict(
-        batch_size=32,
+        batch_size=batch_size,
         num_workers=4,
         persistent_workers=True,
         drop_last=False,

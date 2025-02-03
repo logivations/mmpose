@@ -2,15 +2,26 @@
 import argparse
 import os
 import os.path as osp
-
-from mmengine.config import Config, DictAction
-from mmengine.runner import Runner
-
+import cv2
+from mmpose.datasets import build_dataset
 from auto_training.config_factories.mmpose_config_factory import make_mmpose_config
+from mmengine.runner import Runner
+from mmengine.config import DictAction
+from mmengine.registry import TRANSFORMS
+from mmpose.datasets.transforms import LoadImage, GetBBoxCenterScale, RandomBBoxTransform, TopdownAffine, Albumentation, GenerateTarget, RandomFlip
+import torch
+import numpy as np
 
-    
+TRANSFORMS.register_module(module=LoadImage)
+TRANSFORMS.register_module(module=GetBBoxCenterScale)
+TRANSFORMS.register_module(module=TopdownAffine)
+TRANSFORMS.register_module(module=Albumentation)
+TRANSFORMS.register_module(module=GenerateTarget)
+TRANSFORMS.register_module(module=RandomBBoxTransform)
+
+
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train a pose model')
+    parser = argparse.ArgumentParser(description='Train or visualize a pose model')
     parser.add_argument('config', help='train config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
@@ -18,7 +29,7 @@ def parse_args():
         nargs='?',
         type=str,
         const='auto',
-        help='If specify checkpint path, resume from it, while if not '
+        help='If specify checkpoint path, resume from it, while if not '
         'specify, try to auto resume from the latest checkpoint '
         'in the work directory.')
     parser.add_argument(
@@ -78,10 +89,10 @@ def parse_args():
         choices=['none', 'pytorch', 'slurm', 'mpi'],
         default='none',
         help='job launcher')
-    # When using PyTorch version >= 2.0.0, the `torch.distributed.launch`
-    # will pass the `--local-rank` parameter to `tools/train.py` instead
-    # of `--local_rank`.
     parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
+    parser.add_argument('--visualize', action='store_true', help='Visualize augmented dataset samples instead of training')
+    parser.add_argument('--num-samples', type=int, default=5, help='Number of samples to visualize')
+
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -90,8 +101,6 @@ def parse_args():
 
 
 def merge_args(cfg, args):
-    """Merge CLI arguments to config."""
-
     if args.no_validate:
         cfg.val_cfg = None
         cfg.val_dataloader = None
@@ -100,18 +109,13 @@ def merge_args(cfg, args):
     cfg.launcher = args.launcher
     cfg.work_dir = args.work_dir
 
-    # enable automatic-mixed-precision training
-    if args.amp is True:
+    if args.amp:
         from mmengine.optim import AmpOptimWrapper, OptimWrapper
         optim_wrapper = cfg.optim_wrapper.get('type', OptimWrapper)
-        assert optim_wrapper in (OptimWrapper, AmpOptimWrapper,
-                                 'OptimWrapper', 'AmpOptimWrapper'), \
-            '`--amp` is not supported custom optimizer wrapper type ' \
-            f'`{optim_wrapper}.'
+        assert optim_wrapper in (OptimWrapper, AmpOptimWrapper, 'OptimWrapper', 'AmpOptimWrapper')
         cfg.optim_wrapper.type = 'AmpOptimWrapper'
         cfg.optim_wrapper.setdefault('loss_scale', 'dynamic')
 
-    # resume training
     if args.resume == 'auto':
         cfg.resume = True
         cfg.load_from = None
@@ -119,54 +123,134 @@ def merge_args(cfg, args):
         cfg.resume = True
         cfg.load_from = args.resume
 
-    # enable auto scale learning rate
     if args.auto_scale_lr:
         cfg.auto_scale_lr.enable = True
-
-    # visualization
-    if args.show or (args.show_dir is not None):
-        assert 'visualization' in cfg.default_hooks, \
-            'PoseVisualizationHook is not set in the ' \
-            '`default_hooks` field of config. Please set ' \
-            '`visualization=dict(type="PoseVisualizationHook")`'
-
-        cfg.default_hooks.visualization.enable = True
-        cfg.default_hooks.visualization.show = args.show
-        if args.show:
-            cfg.default_hooks.visualization.wait_time = args.wait_time
-        cfg.default_hooks.visualization.out_dir = args.show_dir
-        cfg.default_hooks.visualization.interval = args.interval
 
     if args.cfg_options is not None:
         cfg.merge_from_dict(args.cfg_options)
 
-    # set preprocess configs to model
-    if 'preprocess_cfg' in cfg:
-        cfg.model.setdefault('data_preprocessor',
-                             cfg.get('preprocess_cfg', {}))
-
     return cfg
+
+def plot_keypoints_on_image_cv2(image, heatmap, labels=None):
+    """
+    Draws keypoints extracted from a heatmap onto an image using OpenCV.
+    
+    Parameters:
+        image (np.ndarray): Input image of shape (256,256) or (256,256,3).
+        heatmap (np.ndarray): Heatmap of shape (4,64,64); each channel represents one keypoint.
+        labels (list of str): Optional list of labels corresponding to each keypoint.
+    
+    Returns:
+        np.ndarray: The image with keypoints and labels drawn.
+    """
+    num_keypoints, h_heat, w_heat = heatmap.shape
+
+    # Compute scaling factors from heatmap size to image size.
+    scale_x = image.shape[1] / w_heat   # e.g. 256/64 = 4
+    scale_y = image.shape[0] / h_heat     # e.g. 256/64 = 4
+
+    # If the image is grayscale, convert it to BGR for colored drawing.
+    if len(image.shape) == 2 or image.shape[2] == 1:
+        image_bgr = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+    else:
+        image_bgr = image.copy()
+
+    # Process each heatmap channel.
+    for i in range(num_keypoints):
+        # Use cv2.minMaxLoc to find the location of the maximum value.
+        # Note: cv2.minMaxLoc returns (x, y) as (col, row)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(heatmap[i])
+        x_heat, y_heat = max_loc  # These coordinates are in the 64x64 space
+
+        # Scale coordinates to the image size.
+        x_img = int(x_heat * scale_x)
+        y_img = int(y_heat * scale_y)
+
+        # Draw a marker (a red cross) at the keypoint location.
+        cv2.drawMarker(
+            image_bgr, (x_img, y_img), color=(0, 0, 255),
+            markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2
+        )
+
+        # Determine the label for this keypoint.
+        label_text = labels[i] if labels is not None and i < len(labels) else f'KP {i}'
+
+        # Draw the label slightly offset from the keypoint.
+        cv2.putText(
+            image_bgr, label_text, (x_img + 5, y_img - 5),
+            fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.5,
+            color=(0, 255, 255), thickness=2, lineType=cv2.LINE_AA
+        )
+
+    return image_bgr
+
+
+def visualize_samples(cfg, classes, num_samples=5, show=False, show_dir=None, wait_time=1):
+    """Visualize augmented dataset samples with keypoint annotations."""
+    dataset_cfg = cfg.train_dataloader['dataset']
+    dataset = build_dataset(dataset_cfg)
+    
+    print(f"Visualizing {num_samples} samples from the dataset...")
+
+    for i in range(num_samples):
+        data_info = dataset[i]
+        print(data_info)
+        data_samples = data_info.get('data_samples', {})
+        print(f"Sample {i} - Type of 'data_samples': {type(data_samples)}")
+        print(f"Sample {i} - Content of 'data_samples': {data_samples}")
+
+        img = data_info.get('inputs')
+
+        if isinstance(img, torch.Tensor):
+            img = img.permute(1, 2, 0).numpy()  
+
+        keypoints = data_samples.gt_instances[0]["keypoints"][0]
+        
+        vis_img = img.copy()
+        
+        
+        # Draw the keypoints and labels on the image.
+        vis_img = plot_keypoints_on_image_cv2(vis_img, data_samples.gt_fields.heatmaps.numpy(), classes)
+        
+
+        if show:
+            cv2.imshow(f'Sample {i}', vis_img)
+            cv2.waitKey(int(wait_time * 1000))
+            cv2.destroyAllWindows()
+
+        if show_dir:
+            os.makedirs(show_dir, exist_ok=True)
+            save_path = osp.join(show_dir, f'sample_{i}.jpg')
+            cv2.imwrite(save_path, vis_img)
+            print(f"Saved visualization to: {save_path}")
 
 
 def main():
     args = parse_args()
+    dataset = 'wurth_optimization_dataset'
+    data_path = f'/data/{dataset}/'
 
-    # load config
     cfg = make_mmpose_config(
-        data_root=args.data_root,
-        classes=args.classes
+        data_path,
+        classes=args.classes,
+        res=(256, 256),
+        augmentation_index=0,
+        batch_size=64,
+        repeat_times=3
     )
 
-    # merge CLI arguments to config
     cfg = merge_args(cfg, args)
-    
-    cfg.dump(osp.join(cfg.work_dir, osp.basename(args.config)))
 
-    # build the runner from config
-    runner = Runner.from_cfg(cfg)
+    if args.visualize:
+        visualize_samples(cfg, args.classes, num_samples=args.num_samples, show=args.show, show_dir=args.show_dir, wait_time=args.wait_time)
+    else:
+        cfg.work_dir = "/data/wurth_optimization/manual_training"
+        cfg.dump(osp.join(cfg.work_dir, "conf.py"))
+
+        runner = Runner.from_cfg(cfg)
 
     # start training
-    runner.train()
+        runner.train()
 
 
 if __name__ == '__main__':
