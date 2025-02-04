@@ -194,10 +194,7 @@ def visualize_samples(cfg, classes, num_samples=5, show=False, show_dir=None, wa
 
     for i in range(num_samples):
         data_info = dataset[i]
-        print(data_info)
         data_samples = data_info.get('data_samples', {})
-        print(f"Sample {i} - Type of 'data_samples': {type(data_samples)}")
-        print(f"Sample {i} - Content of 'data_samples': {data_samples}")
 
         img = data_info.get('inputs')
 
@@ -222,7 +219,6 @@ def visualize_samples(cfg, classes, num_samples=5, show=False, show_dir=None, wa
             os.makedirs(show_dir, exist_ok=True)
             save_path = osp.join(show_dir, f'sample_{i}.jpg')
             cv2.imwrite(save_path, vis_img)
-            print(f"Saved visualization to: {save_path}")
 
 
 def main():
@@ -233,7 +229,7 @@ def main():
     cfg = make_mmpose_config(
         data_path,
         classes=args.classes,
-        res=(256, 256),
+        res=(384, 384),
         augmentation_index=0,
         batch_size=64,
         repeat_times=3

@@ -11,20 +11,19 @@ AUGMENTATIONS ={
                 dict(
                     type='OneOf',
                     transforms=[
-                        dict(type='MotionBlur', blur_limit=3, p=0.3),
-                        dict(type='MedianBlur', blur_limit=3, p=0.2),
-                        dict(type='Blur', blur_limit=3, p=0.2),
-                    ], p=0.3),
+                        dict(type='MotionBlur', blur_limit=3),
+                        dict(type='MedianBlur', blur_limit=3),
+                        dict(type='Blur', blur_limit=3),
+                    ], p=0.6),
                 dict(
                     type='OneOf',
                     transforms=[
-                        dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.3),
-                        dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
-                    ], p=0.4),
+                        dict(type='GaussNoise', var_limit=(10.0, 50.0)),
+                        dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1)),
+                    ], p=0.7),
 
-            ]),
-        
-        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2],  rotate_factor=10),
+            ]),        
+        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.9, 1.3],  rotate_factor=180),
     ],
     1: [
         dict(
@@ -33,8 +32,9 @@ AUGMENTATIONS ={
                 dict(type='RandomBrightnessContrast', brightness_limit=[-0.25, 0.1], contrast_limit=[-0.4, 0.4], p=0.4),
                 
         ]),
-        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2], rotate_factor=80),
+        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.9, 1.3],  rotate_factor=180),
     ],
+    2: [],
 }
 
 
@@ -191,7 +191,7 @@ def make_mmpose_config(
     # ]
     cfg.train_pipeline = [
         dict(type='mmpose.LoadImage'),
-        dict(type='mmpose.GetBBoxCenterScale', padding=1.0),
+        dict(type='mmpose.GetBBoxCenterScale', padding=1.25),
         *AUGMENTATIONS[augmentation_index],
         dict(type='mmpose.TopdownAffine', input_size=cfg.codec['input_size']),
         dict(type='mmpose.GenerateTarget', encoder=cfg.codec),
@@ -200,7 +200,7 @@ def make_mmpose_config(
 
     val_pipeline = [
         dict(type='LoadImage'),
-        dict(type='GetBBoxCenterScale', padding=1.0),
+        dict(type='GetBBoxCenterScale', padding=1.25),
         dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
         dict(type='PackPoseInputs')
     ]
@@ -218,8 +218,10 @@ def make_mmpose_config(
                 labels=classes,
                 data_root=data_root,
                 data_mode=cfg.data_mode,
-                ann_file='annotations/forklift_keypoints_train2017.json',
-                data_prefix=dict(img='train2017/'),
+                #ann_file='annotations/forklift_keypoints_train2017.json',
+                #data_prefix=dict(img='train2017/'),
+                ann_file='annotations/generated.json',
+                data_prefix=dict(img='generated/'),
                 pipeline=cfg.train_pipeline,
             ),
         )
