@@ -64,7 +64,7 @@ class GetBBoxCenterScale(BaseTransform):
 
         Returns:
             dict: The result dict.
-        """
+        """            
         if 'bbox_center' in results and 'bbox_scale' in results:
             rank, _ = get_dist_info()
             if rank == 0:
@@ -74,6 +74,13 @@ class GetBBoxCenterScale(BaseTransform):
 
         else:
             bbox = results['bbox']
+            
+            if self.padding == 1.0:
+                h, w = results['img'].shape[:2]
+
+                # make a bbox nearly full image size, so that there is a bit of room for bbox scaling
+                f = 0.01
+                bbox = np.array([[f*w, f*h, w*(1-2*f), h*(1-2*f)]], dtype=np.float32)
             center, scale = bbox_xyxy2cs(bbox, padding=self.padding)
 
             results['bbox_center'] = center

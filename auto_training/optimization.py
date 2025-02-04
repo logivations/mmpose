@@ -12,8 +12,8 @@ import subprocess
 
 def objective(trial):
     # # Define the hyperparameter search space
-    res = trial.suggest_categorical("resolution", [384])  # square resolutions
-    augmentation_index = trial.suggest_categorical("augmentation_index", [0, 1])  # Indices for different augmentations
+    res = trial.suggest_categorical("resolution", [256])  # square resolutions
+    augmentation_index = trial.suggest_categorical("augmentation_index", [0])  # Indices for different augmentations
     batch_size = trial.suggest_categorical("batch_size", [64])  # Batch size
     repeat_times = trial.suggest_categorical("repeat_times", [2, 3])  # Batch size
     resnet_depth = trial.suggest_categorical("resnet_depth", [18])  # backbone resnet depth

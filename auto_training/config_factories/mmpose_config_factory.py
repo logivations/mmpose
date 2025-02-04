@@ -24,7 +24,7 @@ AUGMENTATIONS ={
 
             ]),
         
-        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2],  rotate_factor=80),
+        dict(type='mmpose.RandomBBoxTransform', scale_factor=[0.7, 1.2],  rotate_factor=10),
     ],
     1: [
         dict(
@@ -46,7 +46,7 @@ def make_mmpose_config(
         batch_size: int = 64,
         repeat_times: int = 1,
         resnet_depth: int = 18, # 18 or 50
-        max_epoch: int = 120
+        max_epoch: int = 300
 ):
 
     cfg = Config()
@@ -147,11 +147,21 @@ def make_mmpose_config(
             mean=[123.675, 116.28, 103.53],
             std=[58.395, 57.12, 57.375],
             bgr_to_rgb=True),
+        #backbone=dict(
+        #    type='ResNet',
+        #    depth=resnet_depth,
+        #    init_cfg=dict(type='Pretrained', checkpoint=f'torchvision://resnet{resnet_depth}'),
+        #),
         backbone=dict(
-            type='ResNet',
-            depth=resnet_depth,
-            init_cfg=dict(type='Pretrained', checkpoint=f'torchvision://resnet{resnet_depth}'),
+            type='PyramidVisionTransformerV2',
+            embed_dims=64,
+            num_layers=[3, 4, 6, 3],
+            init_cfg=dict(
+                type='Pretrained',
+                checkpoint='https://github.com/whai362/PVT/'
+                'releases/download/v2/pvt_v2_b2.pth'),
         ),
+        neck=dict(type='FeatureMapProcessor', select_index=3),
         head=dict(
             type='HeatmapHead',
             in_channels=512,
@@ -181,7 +191,7 @@ def make_mmpose_config(
     # ]
     cfg.train_pipeline = [
         dict(type='mmpose.LoadImage'),
-        dict(type='mmpose.GetBBoxCenterScale'),
+        dict(type='mmpose.GetBBoxCenterScale', padding=1.0),
         *AUGMENTATIONS[augmentation_index],
         dict(type='mmpose.TopdownAffine', input_size=cfg.codec['input_size']),
         dict(type='mmpose.GenerateTarget', encoder=cfg.codec),
@@ -190,7 +200,7 @@ def make_mmpose_config(
 
     val_pipeline = [
         dict(type='LoadImage'),
-        dict(type='GetBBoxCenterScale'),
+        dict(type='GetBBoxCenterScale', padding=1.0),
         dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
         dict(type='PackPoseInputs')
     ]

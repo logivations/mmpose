@@ -84,8 +84,8 @@ def main():
         pose_results = inference_topdown(
             model,
             image_rgb,
-            person_bboxes,
-            bbox_format='xyxy'  # COCO annotations typically use 'xywh' format
+            # person_bboxes,
+            # bbox_format='xyxy'  # COCO annotations typically use 'xywh' format
         )
 
         keypoints_results = []
@@ -105,7 +105,7 @@ def main():
 
                 if args.out_dir:
                     draw_keypoints(image, keypoints, scores, args.score_thr)
-                    draw_bboxes(image, person_bboxes)
+                    # draw_bboxes(image, person_bboxes)
 
         # Save the visualized image if `out-dir` is provided
         if args.out_dir:

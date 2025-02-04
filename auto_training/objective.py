@@ -19,10 +19,6 @@ def merge_args(cfg):
     """Merge CLI arguments to config."""
 
     cfg.launcher = 'none'
-
-
-    cfg.resume = True
-    cfg.load_from = None
     
     # set preprocess configs to model
     if 'preprocess_cfg' in cfg:
@@ -64,7 +60,7 @@ def train(res, augmentation_index, batch_size, repeat_times, resnet_depth):
     
     # build the runner from config
     runner = Runner.from_cfg(cfg)
-
+    
     # start training
     runner.train()
     
