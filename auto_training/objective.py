@@ -12,6 +12,7 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, help='batch size')
     parser.add_argument('--repeat_times', type=int, help='repeat times')
     parser.add_argument('--resnet_depth', type=int, help='resnet_depth')
+    parser.add_argument('--backbone_type', type=str, help='backbone_type')
     
     return parser.parse_args()
 
@@ -29,8 +30,8 @@ def merge_args(cfg):
 
 
 
-def train(res, augmentation_index, batch_size, repeat_times, resnet_depth):
-    timestamp = f"det_res{res}_aug{augmentation_index}_b{batch_size}_rep{repeat_times}_d{resnet_depth}"
+def train(res, augmentation_index, batch_size, repeat_times, resnet_depth, backbone_type):
+    timestamp = f"det_res{res}_aug{augmentation_index}_b{batch_size}_rep{repeat_times}_d{resnet_depth}_{backbone_type}"
     # dataset = 'general_dataset_12_12_24'
     dataset = 'wurth_optimization_dataset'
     data_path = f'/data/{dataset}/'
@@ -44,7 +45,8 @@ def train(res, augmentation_index, batch_size, repeat_times, resnet_depth):
         augmentation_index=augmentation_index,
         batch_size=batch_size,
         repeat_times=repeat_times,
-        resnet_depth=resnet_depth
+        resnet_depth=resnet_depth,
+        backbone_type=backbone_type
     )
 
     # init the logger before other steps
@@ -73,5 +75,6 @@ if __name__ == '__main__':
         augmentation_index=args.augmentation_index, 
         batch_size=args.batch_size, 
         repeat_times=args.repeat_times,
-        resnet_depth=args.resnet_depth
+        resnet_depth=args.resnet_depth,
+        backbone_type=args.backbone_type,
         )

@@ -46,7 +46,8 @@ def make_mmpose_config(
         batch_size: int = 64,
         repeat_times: int = 1,
         resnet_depth: int = 18, # 18 or 50
-        max_epoch: int = 300
+        max_epoch: int = 210,
+        backbone_type="resnet"
 ):
 
     cfg = Config()
@@ -126,8 +127,8 @@ def make_mmpose_config(
         dict(
             type='MultiStepLR',
             begin=0,
-            end=300,
-            milestones=[200, 250],
+            end=210,
+            milestones=[170, 200],
             gamma=0.1,
             by_epoch=True)
     ]
@@ -139,19 +140,7 @@ def make_mmpose_config(
     cfg.codec = dict(
         type='MSRAHeatmap', input_size=res, heatmap_size=(int(res[0]/4), int(res[1]/4)), sigma=2)
 
-    # model settings
-    cfg.model = dict(
-        type='TopdownPoseEstimator',
-        data_preprocessor=dict(
-            type='PoseDataPreprocessor',
-            mean=[123.675, 116.28, 103.53],
-            std=[58.395, 57.12, 57.375],
-            bgr_to_rgb=True),
-        #backbone=dict(
-        #    type='ResNet',
-        #    depth=resnet_depth,
-        #    init_cfg=dict(type='Pretrained', checkpoint=f'torchvision://resnet{resnet_depth}'),
-        #),
+    if backbone_type == "pvt":
         backbone=dict(
             type='PyramidVisionTransformerV2',
             embed_dims=64,
@@ -160,8 +149,25 @@ def make_mmpose_config(
                 type='Pretrained',
                 checkpoint='https://github.com/whai362/PVT/'
                 'releases/download/v2/pvt_v2_b2.pth'),
-        ),
-        neck=dict(type='FeatureMapProcessor', select_index=3),
+        )
+        neck=dict(type='FeatureMapProcessor', select_index=3)
+    else:
+        backbone=dict(
+            type='ResNet',
+            depth=resnet_depth,
+            init_cfg=dict(type='Pretrained', checkpoint=f'torchvision://resnet{resnet_depth}'),
+        )
+        neck=None
+    # model settings
+    cfg.model = dict(
+        type='TopdownPoseEstimator',
+        data_preprocessor=dict(
+            type='PoseDataPreprocessor',
+            mean=[123.675, 116.28, 103.53],
+            std=[58.395, 57.12, 57.375],
+            bgr_to_rgb=True),
+        backbone=backbone,
+        neck=neck,
         head=dict(
             type='HeatmapHead',
             in_channels=512,
@@ -207,7 +213,7 @@ def make_mmpose_config(
     # data loaders
     cfg.train_dataloader = dict(
         batch_size=batch_size,
-        num_workers=4,
+        num_workers=10,
         persistent_workers=True,
         sampler=dict(type='DefaultSampler', shuffle=True),
         dataset=dict(
@@ -220,8 +226,8 @@ def make_mmpose_config(
                 data_mode=cfg.data_mode,
                 #ann_file='annotations/forklift_keypoints_train2017.json',
                 #data_prefix=dict(img='train2017/'),
-                ann_file='annotations/generated.json',
-                data_prefix=dict(img='generated/'),
+                ann_file='annotations/combined_annotations.json',
+                data_prefix=dict(img='combined/'),
                 pipeline=cfg.train_pipeline,
             ),
         )
