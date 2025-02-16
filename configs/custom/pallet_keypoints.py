@@ -78,19 +78,21 @@ model = dict(
 dataset_type = 'CocoDataset'
 data_mode = 'topdown'
 data_root = 'data/new_dataset_14_02/'
-work_dir = 'pallet_kp_models/new_dataset_14_02/'
+work_dir = 'pallet_kp_models/new_dataset_16_02_with_adapted_flip_less_move/'
 labels = ["top_left", "top_right", "bottom_left", "bottom_right"]
 
 
 # pipelines
 train_pipeline = [
     dict(type='LoadImage'),
-    dict(type='GetBBoxCenterScale'),
-    #  dict(type='RandomFlip', direction='horizontal'),  # TODO: ASK DOES IT NEEDED
+    dict(type='GetBBoxCenterScale',padding=1.05),
+    dict(type='RandomFlip', direction='horizontal'),  # TODO: ASK DOES IT NEEDED
     dict(
         type='RandomBBoxTransform',
-        rotate_factor=10.0,
-        rotate_prob=0.6
+        rotate_factor=7,
+        rotate_prob=0.5,
+        shift_factor=0.03,
+        scale_factor=(0.9, 1.1)
     ),
     dict(type='TopdownAffine', input_size=codec['input_size']),
     dict(type="RandomBottomHalf", threshold=0.4, p=0.5),
@@ -133,7 +135,7 @@ train_pipeline = [
 
 val_pipeline = [
     dict(type='LoadImage'),
-    dict(type='GetBBoxCenterScale'),
+    dict(type='GetBBoxCenterScale',padding=1.05),
     dict(type='TopdownAffine', input_size=codec['input_size']),
     dict(type='PackPoseInputs')
 ]

@@ -7,6 +7,7 @@ import cv2
 import torch
 from mmengine.config import Config, DictAction
 from mmengine.runner import Runner
+import cv2
 
 from mmpose.datasets import build_dataset
 
@@ -79,7 +80,7 @@ def parse_args():
     # of `--local_rank`.
     parser.add_argument('--local_rank', '--local-rank', type=int, default=0)
     parser.add_argument('--visualize', action='store_true', help='Visualize augmented dataset samples instead of training')
-    parser.add_argument('--num-samples', type=int, default=5, help='Number of samples to visualize')
+    parser.add_argument('--num-samples', type=int, default=20, help='Number of samples to visualize')
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
         os.environ['LOCAL_RANK'] = str(args.local_rank)
@@ -216,6 +217,7 @@ def plot_keypoints_on_image_cv2(image, heatmap, labels=None):
 def visualize_samples(cfg, classes, num_samples=5, show_dir=None):
     """Visualize augmented dataset samples with keypoint annotations."""
     dataset_cfg = cfg.train_dataloader['dataset']
+    print(dataset_cfg)
     dataset = build_dataset(dataset_cfg)
 
     print(f"Visualizing {num_samples} samples from the dataset...")
@@ -253,7 +255,21 @@ def main():
                              cfg.get('preprocess_cfg', {}))
 
     if args.visualize:
-        visualize_samples(cfg, args.classes, num_samples=args.num_samples, show_dir="/tmp/viz")
+        # need to manually import all transforms here
+        from mmengine.registry import TRANSFORMS
+        from mmpose.datasets.transforms import RandomFlip, LoadImage, TorchVisionWrapper, PackPoseInputs,RandomBottomHalf,  GetBBoxCenterScale, RandomBBoxTransform, TopdownAffine, Albumentation, GenerateTarget, RandomFlip
+        
+        TRANSFORMS.register_module(module=LoadImage)
+        TRANSFORMS.register_module(module=RandomFlip, force=True)
+        TRANSFORMS.register_module(module=GetBBoxCenterScale)
+        TRANSFORMS.register_module(module=TopdownAffine)
+        TRANSFORMS.register_module(module=Albumentation)
+        TRANSFORMS.register_module(module=GenerateTarget)
+        TRANSFORMS.register_module(module=RandomBBoxTransform)
+        TRANSFORMS.register_module(module=TorchVisionWrapper)
+        TRANSFORMS.register_module(module=RandomBottomHalf)
+        TRANSFORMS.register_module(module=PackPoseInputs)
+        visualize_samples(cfg, cfg.labels, num_samples=args.num_samples, show_dir="/tmp/viz")
         return
 
     # build the runner from config
