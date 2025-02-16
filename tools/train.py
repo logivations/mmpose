@@ -3,8 +3,12 @@ import argparse
 import os
 import os.path as osp
 
+import cv2
+import torch
 from mmengine.config import Config, DictAction
 from mmengine.runner import Runner
+
+from mmpose.datasets import build_dataset
 
 
 def parse_args():
