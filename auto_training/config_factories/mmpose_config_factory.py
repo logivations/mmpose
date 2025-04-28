@@ -125,7 +125,7 @@ def make_mmpose_config(
     cfg.train_pipeline = [
         dict(type='LoadImage'),
         dict(type='GetBBoxCenterScale'),
-        dict(direction='horizontal', type='RandomFlip', prob=0.5),
+        # dict(direction='horizontal', type='RandomFlip', prob=0.5),
         dict(type='RandomBBoxTransform', scale_factor=[0.7, 1.3], shift_factor=0.05, rotate_factor=80),
         dict(type='TopdownAffine', input_size=cfg.codec['input_size']),
         dict(
