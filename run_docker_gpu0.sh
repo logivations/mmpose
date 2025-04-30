@@ -1,3 +1,8 @@
-docker run --rm --network host -w /data/new_mmpose/mmpose \
+docker run --network host -w /mmpose \
+  -dit \
+  --name mmpose \
+  -v /code/mmpose:/mmpose \
   -v /data:/data \
-  --gpus '"device=0"' --shm-size=8g -it mmpose:1.3.2_cuda
+  --gpus '"device=0"' --shm-size=8g -it \
+  mmpose:latest
+

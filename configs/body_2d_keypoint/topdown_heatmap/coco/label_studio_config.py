@@ -1,15 +1,18 @@
 _base_ = ['../../../_base_/default_runtime.py']
 
-num_keypoints = 4  # CHECK IT PLZ
+
+num_keypoints =4 # CHECK IT PLZ
 
 # runtime
 train_cfg = dict(max_epochs=300, val_interval=10)
 
 # optimizer
-optim_wrapper = dict(optimizer=dict(
-    type='Adam',
-    lr=5e-4,
-))
+optim_wrapper = dict(
+    optimizer=dict(
+        type='Adam',
+        lr=5e-4,
+    )
+)
 # learning policy
 param_scheduler = [
     dict(
@@ -19,7 +22,7 @@ param_scheduler = [
         type='MultiStepLR',
         begin=0,
         end=300,
-        milestones=[100, 200],
+        milestones=[200, 250],
         gamma=0.1,
         by_epoch=True)
 ]
@@ -29,32 +32,16 @@ auto_scale_lr = dict(base_batch_size=64)
 
 # hooks
 default_hooks = dict(
-    checkpoint=dict(save_best='val/PCK@0.05', rule='greater'),
+    checkpoint=dict(save_best='coco/AP', rule='greater'),
 )
 
 # custom_hooks = [
-# dict(type='PCKAccuracyTrainHook', interval=10, thr=0.05),
+    # dict(type='PCKAccuracyTrainHook', interval=10, thr=0.05),
 # ]
 
 # codec settings
 codec = dict(
-    type='MSRAHeatmap', input_size=(256, 256), heatmap_size=(64, 64), sigma=2)
-
-
-# base dataset settings
-dataset_type = 'CocoDataset'
-data_mode = 'topdown'
-data_root = '/data/rewe_keypoints/'
-labels = ['front_left', 'front_right', 'rear_left', 'rear_right']
-
-symmetries = [{
-    "front_left": "rear_right",
-    "front_right": "rear_left",
-    "rear_left":  "front_right",
-    "rear_right": "front_left",
-}
-]
-
+    type='MSRAHeatmap', input_size=(192, 256), heatmap_size=(48, 64), sigma=2)
 
 # model settings
 model = dict(
@@ -73,23 +60,18 @@ model = dict(
         type='HeatmapHead',
         in_channels=512,
         out_channels=num_keypoints,
-        #loss= dict(type='KeypointMSELoss', use_target_weight=True),
-        loss=dict(
-            type='OutputSymmetryLoss',
-            labels=labels,
-            symmetries=symmetries,
-        ),
-        decoder=codec,
-        labels=labels,
-        symmetries = symmetries,
-        ),
+        loss=dict(type='KeypointMSELoss', use_target_weight=True),
+        decoder=codec),
     test_cfg=dict(
-        flip_test=False,
+        flip_test=True,
         flip_mode='heatmap',
         shift_heatmap=True,
     ))
 
-
+# base dataset settings
+dataset_type = 'CocoDataset'
+data_mode = 'topdown'
+data_root = '/dataset'
 
 # pipelines
 train_pipeline = [
@@ -119,7 +101,7 @@ train_pipeline = [
                     dict(type='GaussNoise', var_limit=(10.0, 50.0), p=0.3),
                     dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
                 ], p=0.4),
-
+            
             dict(type='HueSaturationValue', hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.3),
         ]),
     dict(type='GenerateTarget', encoder=codec),
@@ -140,99 +122,52 @@ train_dataloader = dict(
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
         type=dataset_type,
-        labels=labels,
+	    num_keypoints=num_keypoints,
         data_root=data_root,
         data_mode=data_mode,
-        ann_file='coco/train.json',
-        data_prefix=dict(img='images'),
+        ann_file='annotations/forklift_keypoints_train2017.json',
+        data_prefix=dict(img='train2017/'),
         pipeline=train_pipeline,
     ))
 val_dataloader = dict(
-    batch_size=64,
+    batch_size=32,
     num_workers=4,
     persistent_workers=True,
     drop_last=False,
     sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
     dataset=dict(
         type=dataset_type,
-        labels=labels,
+	    num_keypoints=num_keypoints,
         data_root=data_root,
         data_mode=data_mode,
-        ann_file='coco/val.json',
+        ann_file='annotations/forklift_keypoints_train2017.json',
         bbox_file='',
-        data_prefix=dict(img='images/'),
+        data_prefix=dict(img='val2017/'),
         test_mode=True,
         pipeline=val_pipeline,
     ))
-
-test_dataloader = dict(
-    batch_size=64,
-    num_workers=4,
-    persistent_workers=True,
-    drop_last=False,
-    sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
-    dataset=dict(
-        type=dataset_type,
-        labels=labels,
-        data_root=data_root,
-        data_mode=data_mode,
-        ann_file='coco/test.json',
-        bbox_file='',
-        data_prefix=dict(img='images/'),
-        test_mode=True,
-        pipeline=val_pipeline,
-    ))
+test_dataloader = val_dataloader
 
 # evaluators
 val_evaluator = [
-    #dict(
-    #    type='CocoMetric',
-    #    ann_file=data_root + "coco/val.json",
-    #),
     dict(
-        type='PCKAccuracy',
-        prefix="val",
-        thr=0.01,
-        labels=labels,
-        symmetries=symmetries,
+        type='CocoMetric',
+        ann_file=data_root + 'annotations/forklift_keypoints_train2017.json'
+    ),
+    dict(
+        type='EPE',
     ),
     dict(
         type='PCKAccuracy',
-        prefix="val",
-        thr=0.05,
-        labels=labels,
-        symmetries=symmetries,
+        prefix="5pr_",
     ),
     dict(
         type='PCKAccuracy',
         thr=0.1,
-        prefix="val",
-        labels=labels,
-        symmetries=symmetries,
-    ),
-    ]
-
-test_evaluator = [
-    dict(
-        type='PCKAccuracy',
-        prefix="test",
-        thr=0.01,
-        labels=labels,
-        symmetries=symmetries,
+        prefix="10pr_",
     ),
     dict(
-        type='PCKAccuracy',
-        prefix="test",
-        thr=0.05,
-        labels=labels,
-        symmetries=symmetries,
+        type='AUC',
     ),
-    dict(
-        type='PCKAccuracy',
-        thr=0.1,
-        prefix="test",
-        labels=labels,
-        symmetries=symmetries,
-    ),
-
 ]
+test_evaluator = val_evaluator

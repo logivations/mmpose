@@ -1,6 +1,6 @@
-_base_ = ['../../../_base_/default_runtime.py']
+_base_ = ['../_base_/default_runtime.py']
 
-num_keypoints = 4  # CHECK IT PLZ
+num_keypoints = 4
 
 # runtime
 train_cfg = dict(max_epochs=300, val_interval=10)
@@ -19,7 +19,7 @@ param_scheduler = [
         type='MultiStepLR',
         begin=0,
         end=300,
-        milestones=[100, 200],
+        milestones=[200, 250],
         gamma=0.1,
         by_epoch=True)
 ]
@@ -27,34 +27,27 @@ param_scheduler = [
 # automatically scaling LR based on the actual training batch size
 auto_scale_lr = dict(base_batch_size=64)
 
+
 # hooks
 default_hooks = dict(
-    checkpoint=dict(save_best='val/PCK@0.05', rule='greater'),
+    timer=dict(type='IterTimerHook'),
+    logger=dict(type='LoggerHook', interval=50),
+    param_scheduler=dict(type='ParamSchedulerHook'),
+    checkpoint=dict(type='CheckpointHook', interval=10, max_keep_ckpts=1, save_best='coco/AP', rule='greater'),
+    sampler_seed=dict(type='DistSamplerSeedHook'),
+    cdualization=dict(type='PoseVisualizationHook', enable=True),
+    badcase=dict(
+        type='BadCaseAnalysisHook',
+        enable=False,
+        out_dir='badcase',
+        metric_type='loss',
+        badcase_thr=5
+    )
 )
-
-# custom_hooks = [
-# dict(type='PCKAccuracyTrainHook', interval=10, thr=0.05),
-# ]
 
 # codec settings
 codec = dict(
-    type='MSRAHeatmap', input_size=(256, 256), heatmap_size=(64, 64), sigma=2)
-
-
-# base dataset settings
-dataset_type = 'CocoDataset'
-data_mode = 'topdown'
-data_root = '/data/rewe_keypoints/'
-labels = ['front_left', 'front_right', 'rear_left', 'rear_right']
-
-symmetries = [{
-    "front_left": "rear_right",
-    "front_right": "rear_left",
-    "rear_left":  "front_right",
-    "rear_right": "front_left",
-}
-]
-
+    type='MSRAHeatmap', input_size=(224, 224), heatmap_size=(56, 56), sigma=2)
 
 # model settings
 model = dict(
@@ -73,37 +66,45 @@ model = dict(
         type='HeatmapHead',
         in_channels=512,
         out_channels=num_keypoints,
-        #loss= dict(type='KeypointMSELoss', use_target_weight=True),
-        loss=dict(
-            type='OutputSymmetryLoss',
-            labels=labels,
-            symmetries=symmetries,
-        ),
-        decoder=codec,
-        labels=labels,
-        symmetries = symmetries,
-        ),
+        loss=dict(type='KeypointMSELoss', use_target_weight=True),
+        decoder=codec),
     test_cfg=dict(
-        flip_test=False,
+        flip_test=True,
         flip_mode='heatmap',
         shift_heatmap=True,
     ))
 
+# base dataset settings
+dataset_type = 'CocoDataset'
+data_mode = 'topdown'
+data_root = 'data/new_dataset_14_02/'
+work_dir = 'pallet_kp_models/new_dataset_14_02/'
+labels = ["top_left", "top_right", "bottom_left", "bottom_right"]
 
 
 # pipelines
 train_pipeline = [
     dict(type='LoadImage'),
     dict(type='GetBBoxCenterScale'),
-    dict(type='RandomFlip', direction='horizontal'),
-    # dict(type='RandomHalfBody'),
-    # TODO: plot
-    dict(type='RandomBBoxTransform'),
+    #  dict(type='RandomFlip', direction='horizontal'),  # TODO: ASK DOES IT NEEDED
+    dict(
+        type='RandomBBoxTransform',
+        rotate_factor=10.0,
+        rotate_prob=0.6
+    ),
     dict(type='TopdownAffine', input_size=codec['input_size']),
+    dict(type="RandomBottomHalf", threshold=0.4, p=0.5),
     dict(
         type='Albumentation',
         transforms=[
-            dict(type='RandomBrightnessContrast', brightness_limit=[-0.2, 0.2], contrast_limit=[-0.2, 0.2], p=0.4),
+            dict(
+                type='ColorJitter',
+                brightness=[0.8, 1.2],
+                contrast=[0.8, 1.2],
+                saturation=[0.8, 1.2],
+                hue=[-0.5, 0.5],
+                p=0.4
+            ),
 
             dict(
                 type='OneOf',
@@ -120,11 +121,16 @@ train_pipeline = [
                     dict(type='MultiplicativeNoise', multiplier=(0.9, 1.1), p=0.3),
                 ], p=0.4),
 
-            dict(type='HueSaturationValue', hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.3),
+            # dict(type='HueSaturationValue', hue_shift_limit=10, sat_shift_limit=10, val_shift_limit=10, p=0.3), # USE WITHOUT TrivialAugmentation
         ]),
     dict(type='GenerateTarget', encoder=codec),
-    dict(type='PackPoseInputs')
+    dict(type='PackPoseInputs'),
+    dict(type='TorchVisionWrapper', transforms=[
+        dict(type='TrivialAugmentWide', num_magnitude_bins=31)              
+    ], save=True),                                                  # TODO CHECK SAVING will save 100 images in /mmpose/test
+
 ]
+
 val_pipeline = [
     dict(type='LoadImage'),
     dict(type='GetBBoxCenterScale'),
@@ -139,23 +145,29 @@ train_dataloader = dict(
     persistent_workers=True,
     sampler=dict(type='DefaultSampler', shuffle=True),
     dataset=dict(
-        type=dataset_type,
-        labels=labels,
-        data_root=data_root,
-        data_mode=data_mode,
-        ann_file='coco/train.json',
-        data_prefix=dict(img='images'),
-        pipeline=train_pipeline,
-    ))
+        type='RepeatDataset',
+        times=2,
+        dataset=dict(
+            type=dataset_type,
+            labels=labels,
+            data_root=data_root,
+            data_mode=data_mode,
+            ann_file='coco/train.json',
+            data_prefix=dict(img='images/'),
+            pipeline=train_pipeline,
+        )
+    )
+)
+
 val_dataloader = dict(
-    batch_size=64,
+    batch_size=32,
     num_workers=4,
     persistent_workers=True,
     drop_last=False,
     sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
     dataset=dict(
         type=dataset_type,
-        labels=labels,
+	    labels=labels,
         data_root=data_root,
         data_mode=data_mode,
         ann_file='coco/val.json',
@@ -165,74 +177,28 @@ val_dataloader = dict(
         pipeline=val_pipeline,
     ))
 
-test_dataloader = dict(
-    batch_size=64,
-    num_workers=4,
-    persistent_workers=True,
-    drop_last=False,
-    sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
-    dataset=dict(
-        type=dataset_type,
-        labels=labels,
-        data_root=data_root,
-        data_mode=data_mode,
-        ann_file='coco/test.json',
-        bbox_file='',
-        data_prefix=dict(img='images/'),
-        test_mode=True,
-        pipeline=val_pipeline,
-    ))
+test_dataloader = val_dataloader
 
 # evaluators
 val_evaluator = [
-    #dict(
-    #    type='CocoMetric',
-    #    ann_file=data_root + "coco/val.json",
-    #),
     dict(
-        type='PCKAccuracy',
-        prefix="val",
-        thr=0.01,
-        labels=labels,
-        symmetries=symmetries,
+        type='CocoMetric',
+        ann_file=data_root + 'coco/val.json'
+    ),
+    dict(
+        type='EPE',
     ),
     dict(
         type='PCKAccuracy',
-        prefix="val",
-        thr=0.05,
-        labels=labels,
-        symmetries=symmetries,
+        prefix="5pr_",
     ),
     dict(
         type='PCKAccuracy',
         thr=0.1,
-        prefix="val",
-        labels=labels,
-        symmetries=symmetries,
-    ),
-    ]
-
-test_evaluator = [
-    dict(
-        type='PCKAccuracy',
-        prefix="test",
-        thr=0.01,
-        labels=labels,
-        symmetries=symmetries,
+        prefix="10pr_",
     ),
     dict(
-        type='PCKAccuracy',
-        prefix="test",
-        thr=0.05,
-        labels=labels,
-        symmetries=symmetries,
+        type='AUC',
     ),
-    dict(
-        type='PCKAccuracy',
-        thr=0.1,
-        prefix="test",
-        labels=labels,
-        symmetries=symmetries,
-    ),
-
 ]
+test_evaluator = val_evaluator
