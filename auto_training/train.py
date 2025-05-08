@@ -282,7 +282,6 @@ def main():
 
     if args.visualize:
         visualize_samples(cfg, args.classes, num_samples=args.num_samples, dir=args.viz_dir)
-        return
 
     # build the runner from config
     runner = Runner.from_cfg(cfg)
