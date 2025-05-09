@@ -152,7 +152,7 @@ test_dataloader = val_dataloader
 val_evaluator = [
     dict(
         type='CocoMetric',
-        ann_file=data_root + 'coco_annotations.json'
+        ann_file=data_root + '/coco_annotations.json'
     ),
     dict(
         type='EPE',

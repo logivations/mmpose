@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import copy
+import os.path
 import os.path as osp
 from copy import deepcopy
 from itertools import chain, filterfalse, groupby
@@ -235,12 +236,14 @@ class BaseCocoStyleDataset(BaseDataset):
             if img_id % self.sample_interval != 0:
                 continue
             img = self.coco.loadImgs(img_id)[0]
-            img.update({
-                'img_id':
-                img_id,
-                'img_path':
-                osp.join(self.data_prefix['img'], img['file_name']),
-            })
+            img_path = osp.join(self.data_prefix['img'], img['file_name'])
+            if os.path.exists(img_path):
+                img.update({
+                    'img_id': img_id,
+                    'img_path': img_path,
+                })
+            else:
+                continue
             image_list.append(img)
 
             ann_ids = self.coco.getAnnIds(imgIds=img_id)
@@ -450,25 +453,27 @@ class BaseCocoStyleDataset(BaseDataset):
             img = self.coco.loadImgs(det['image_id'])[0]
 
             img_path = osp.join(self.data_prefix['img'], img['file_name'])
-            bbox_xywh = np.array(
-                det['bbox'][:4], dtype=np.float32).reshape(1, 4)
-            bbox = bbox_xywh2xyxy(bbox_xywh)
-            bbox_score = np.array(det['score'], dtype=np.float32).reshape(1)
+            if os.path.exists(img_path):
+                bbox_xywh = np.array(
+                    det['bbox'][:4], dtype=np.float32).reshape(1, 4)
+                bbox = bbox_xywh2xyxy(bbox_xywh)
+                bbox_score = np.array(det['score'], dtype=np.float32).reshape(1)
 
-            # use dummy keypoint location and visibility
-            keypoints = np.zeros((1, num_keypoints, 2), dtype=np.float32)
-            keypoints_visible = np.ones((1, num_keypoints), dtype=np.float32)
-
-            data_list.append({
-                'img_id': det['image_id'],
-                'img_path': img_path,
-                'img_shape': (img['height'], img['width']),
-                'bbox': bbox,
-                'bbox_score': bbox_score,
-                'keypoints': keypoints,
-                'keypoints_visible': keypoints_visible,
-                'id': id_,
-            })
+                # use dummy keypoint location and visibility
+                keypoints = np.zeros((1, num_keypoints, 2), dtype=np.float32)
+                keypoints_visible = np.ones((1, num_keypoints), dtype=np.float32)
+                data_list.append({
+                    'img_id': det['image_id'],
+                    'img_path': img_path,
+                    'img_shape': (img['height'], img['width']),
+                    'bbox': bbox,
+                    'bbox_score': bbox_score,
+                    'keypoints': keypoints,
+                    'keypoints_visible': keypoints_visible,
+                    'id': id_,
+                })
+            else:
+                continue
 
             id_ += 1
 
