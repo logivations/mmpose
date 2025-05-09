@@ -173,8 +173,8 @@ def make_mmpose_config(
             labels=classes,
             data_root=data_root,
             data_mode=cfg.data_mode,
-            ann_file='annotations/forklift_keypoints_train2017.json',
-            data_prefix=dict(img='train2017/'),
+            ann_file='coco_annotations.json',
+            data_prefix=dict(img='train/'),
             pipeline=cfg.train_pipeline,
         ))
     cfg.val_dataloader = dict(
@@ -188,9 +188,9 @@ def make_mmpose_config(
             labels=classes,
             data_root=data_root,
             data_mode=cfg.data_mode,
-            ann_file='annotations/forklift_keypoints_val2017.json',
+            ann_file='coco_annotations.json',
             bbox_file='',
-            data_prefix=dict(img='val2017/'),
+            data_prefix=dict(img='val/'),
             test_mode=True,
             pipeline=val_pipeline,
         ))
@@ -200,7 +200,7 @@ def make_mmpose_config(
     cfg.val_evaluator = [
         dict(
             type='CocoMetric',
-            ann_file=data_root + '/annotations/forklift_keypoints_val2017.json'
+            ann_file=data_root + '/coco_annotations.json'
         ),
         dict(
             type='EPE',
