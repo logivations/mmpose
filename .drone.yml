@@ -40,7 +40,6 @@ steps:
       privileged: true
       build_args:
         - BUILDKIT_INLINE_CACHE=1
-      cache_from: quay.io/logivations/ml_all:LS_mmpose_latest
       tags:
         - LS_mmpose_latest
         - LS_mmpose_latest_${DRONE_COMMIT_SHA}
