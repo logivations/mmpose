@@ -1,14 +1,19 @@
 #!/bin/bash
 
-MODEL_DIR=""
+NVINFER_FILE=""
+ONNX_FILENAME=""
 OPERATE_ON_CLASS_NAMES=()
 CLASSES=()
 RES=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --model-dir)
-            MODEL_DIR="$2"
+        --nvinfer-file)
+            NVINFER_FILE="$2"
+            shift 2
+            ;;
+        --onnx-filename)
+            ONNX_FILENAME="$2"
             shift 2
             ;;
         --operate-on-class-names)
@@ -39,7 +44,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-MODEL_DIR=${MODEL_DIR%%/}
 OPERATE_ON_CLASS_NAMES=$(IFS=';' ; echo "${OPERATE_ON_CLASS_NAMES[*]}")
 CLASSES=$(IFS=';' ; echo "${CLASSES[*]}")
 RES=$(IFS=';' ; echo "${RES[*]}")
@@ -47,7 +51,7 @@ RES=$(IFS=';' ; echo "${RES[*]}")
 echo "[property]
 
 # model loading.
-onnx-file=keypoint_detector.onnx
+onnx-file=$ONNX_FILENAME
 
 # model config
 infer-dims=3;$RES
@@ -56,4 +60,4 @@ infer-dims=3;$RES
 min-kp-score=0.0
 operate-on-class-names=$OPERATE_ON_CLASS_NAMES
 kp-names=$CLASSES
-" > "$MODEL_DIR/keypoints-config.txt"
+" > "$NVINFER_FILE"

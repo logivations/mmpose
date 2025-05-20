@@ -98,7 +98,7 @@ def main():
             model,
             image_rgb,
             person_bboxes,
-            bbox_format='xywh'  # COCO annotations typically use 'xywh' format
+            #bbox_format='xywh'  # COCO annotations typically use 'xywh' format
         )
 
         keypoints_results = []
@@ -128,13 +128,13 @@ def main():
             cv2.imwrite(out_file, image)
 
         # Save individual prediction file
-#        prediction_file = os.path.join(args.predictions_dir, f"{os.path.splitext(img_info['file_name'])[0]}.json")
-#        with open(prediction_file, 'w') as f:
-#            json.dump({
-#                "result": keypoints_results,
-#                "score": 0  # Placeholder for score; replace with actual logic if needed
-#            }, f)
-#
+        prediction_file = os.path.join(args.predictions_dir, f"{os.path.splitext(img_info['file_name'])[0]}.json")
+        with open(prediction_file, 'w') as f:
+            json.dump({
+                "result": keypoints_results,
+                "score": 0  # Placeholder for score; replace with actual logic if needed
+            }, f)
+
         progress_bar.update()
 
     print("Inference completed.")
